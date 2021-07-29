@@ -1,39 +1,31 @@
-
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse
-from rango.models import Category
-from rango.models import Page
-from rango.forms import CategoryForm
-from django.shortcuts import redirect
 from django.urls import reverse
-from rango.forms import PageForm
-from rango.forms import UserForm, UserProfileForm
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from rango.models import Category, Page
+from rango.forms import CategoryForm, PageForm, UserForm, UserProfileForm
 
 
-def index(requset):
-
+def index(request):
     category_list = Category.objects.order_by('-likes')[:5]
     page_list = Page.objects.order_by('-views')[:5]
-    
 
     context_dict = {}
     context_dict['boldmessage'] = 'Crunchy, creamy, cookie, candy, cupcake!'
     context_dict['categories'] = category_list
     context_dict['pages'] = page_list
-    
 
-    return render(requset, 'rango/index.html', context=context_dict)
-
+    return render(request, 'rango/index.html', context=context_dict)
 
 
 def about(request):
     return render(request, 'rango/about.html')
 
 
-
 def show_category(request, category_name_slug):
     context_dict = {}
+
     try:
         category = Category.objects.get(slug=category_name_slug)
         pages = Page.objects.filter(category=category)
@@ -43,12 +35,12 @@ def show_category(request, category_name_slug):
     except Category.DoesNotExist:
         context_dict['pages'] = None
         context_dict['category'] = None
-
+    
     return render(request, 'rango/category.html', context=context_dict)
 
 
 
-
+@login_required
 def add_category(request):
     form = CategoryForm()
 
@@ -57,7 +49,7 @@ def add_category(request):
 
         if form.is_valid():
             form.save(commit=True)
-            return redirect('/rango/')
+            return redirect(reverse('rango:index'))
         else:
             print(form.errors)
     
@@ -65,14 +57,15 @@ def add_category(request):
 
 
 
+@login_required
 def add_page(request, category_name_slug):
     try:
         category = Category.objects.get(slug=category_name_slug)
     except:
         category = None
-    
+
     if category is None:
-        return redirect('/rango/')
+        return redirect(reverse('rango:index'))
 
     form = PageForm()
 
@@ -90,8 +83,11 @@ def add_page(request, category_name_slug):
         else:
             print(form.errors)
     
+
     context_dict = {'form': form, 'category': category}
     return render(request, 'rango/add_page.html', context=context_dict)
+
+
 
 
 def register(request):
@@ -111,6 +107,7 @@ def register(request):
 
             if 'picture' in request.FILES:
                 profile.picture = request.FILES['picture']
+            
             profile.save()
             registered = True
         else:
@@ -118,25 +115,21 @@ def register(request):
     else:
         user_form = UserForm()
         profile_form = UserProfileForm()
-    return render(request, 
-                    'rango/register.html',
-                    context = {'user_form': user_form,
-                                'profile_form': profile_form, 
-                                'registered': registered})
+    
+    return render(request, 'rango/register.html', context={'user_form': user_form, 'profile_form': profile_form, 'registered': registered})
+
+
 
 
 def user_login(request):
-
     if request.method == 'POST':
-
         username = request.POST.get('username')
         password = request.POST.get('password')
 
         user = authenticate(username=username, password=password)
 
         if user:
-
-            if user.is_active:  
+            if user.is_active:
                 login(request, user)
                 return redirect(reverse('rango:index'))
             else:
@@ -144,7 +137,18 @@ def user_login(request):
         else:
             print(f"Invalid login details: {username}, {password}")
             return HttpResponse("Invalid login details supplied.")
-
     else:
-
         return render(request, 'rango/login.html')
+
+
+
+@login_required
+def restricted(request):
+    return render(request, 'rango/restricted.html')
+
+
+
+@login_required
+def user_logout(request):
+    logout(request)
+    return redirect(reverse('rango:index'))
